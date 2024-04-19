@@ -1,0 +1,23 @@
+version: '3.9'
+
+services:
+  model_storage:
+    build: .
+    command: bash
+    container_name: model_storage
+    env_file:
+      - .env
+    volumes:
+      - ./storage:/storage
+    ports:
+      - "4000:22"
+    
+    stdin_open: true
+    tty: true
+
+    networks:
+      - storage_network
+
+networks:
+  storage_network:
+    driver: bridge
