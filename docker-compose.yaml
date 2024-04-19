@@ -1,22 +1,42 @@
 version: '3.9'
 
 services:
-  model_storage:
-    build: .
-    command: bash
+  triton_server_modeler:
+    build: . 
     container_name: model_storage
-    env_file:
-      - .env
-    volumes:
-      - ./storage:/storage
-    ports:
-      - "4000:22"
-    
-    stdin_open: true
-    tty: true
 
+    # Start ssh and tritonserver
+    command: "bash start.sh"
+    
+    ports:
+      # Triton Server Ports
+      - "8100:8000"
+      - "8101:8001"
+      - "8102:8002"
+
+      # SSH port
+      - "4000:22"
+
+    volumes:
+      # Common storage volume
+      - ./storage:/storage
+
+      # Triton model repository volume
+      - ./storage/model_rep_trt_optimum:/models
+
+    shm_size: 256m
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    tty: true
+    stdin_open: true
     networks:
       - storage_network
+
 
 networks:
   storage_network:
