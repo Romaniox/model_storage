@@ -7,7 +7,13 @@ RUN sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/s
 RUN useradd -m -s /bin/bash user
 RUN echo "user:password" | chpasswd
 
+RUN pip install poetry==1.7.1
 WORKDIR /app
+COPY poetry.lock pyproject.toml /app/
+RUN poetry config virtualenvs.create false \
+    && poetry install --no-interaction --no-ansi
+
+COPY model_storage/app.py /app/model_storage/app.py
 COPY start.sh /app/
 
 # ENTRYPOINT service ssh start
