@@ -121,6 +121,109 @@ async def index():
         
     return response.json()
 
+
+@app.post("/upload_new_version/")
+async def upload_new_version(src_file: UploadFile = File(...), model_name: str = Form(...), model_version: str = Form(...)):
+    model_path = os.path.join(MODEL_REPO_PATH, model_name)
+    
+    # Проверяем все существующие версии модели в репозитории
+    if find_triton_version(model_path, model_version) != -1:
+        raise HTTPException(status_code=400, detail="This model version already exists.")
+    
+    # Путь для новой версии модели
+    target_version_path = os.path.join(model_path, "1")  # Начнем с версии 1
+    while os.path.exists(target_version_path):  # Увеличиваем номер версии, если папка уже существует
+        version_number = int(os.path.basename(target_version_path)) + 1
+        target_version_path = os.path.join(model_path, str(version_number))
+
+    # Создаем директорию для новой версии
+    os.makedirs(target_version_path, exist_ok=True)
+    
+    # Сохраняем и распаковываем архив
+    temp_file_path = f"temp_{model_name}_{model_version}"
+    
+    #async with file as incoming_file
+    with open(temp_file_path, 'wb') as temp_file:
+        while data := await src_file.read(1024):  # Читаем файл по частям
+            temp_file.write(data)
+    
+    with zipfile.ZipFile(temp_file_path, 'r') as zip_ref:
+        zip_ref.extractall(target_version_path)
+
+    os.remove(temp_file_path)
+
+    # Чтение существующего meta.json и обновление
+    meta_path = os.path.join(target_version_path, 'meta.json')
+    if os.path.exists(meta_path):
+        with open(meta_path, 'r') as file:
+            meta_data = json.load(file)
+    else:
+        meta_data = {}
+    
+    # Обновление поля model_version
+    meta_data['model_version'] = model_version
+    with open(meta_path, 'w') as file:
+        json.dump(meta_data, file)
+
+    return {"version": model_version}
+
+
+@app.post("/set_semantic_version/")
+async def set_semantic_version(model_name: str, semantic_version: str):
+    model_path = os.path.join(MODEL_REPO_PATH, model_name)
+
+    # Проверяем каждую директорию в папке модели
+    for version_dir in os.listdir(model_path):
+        meta_path = os.path.join(model_path, version_dir, 'meta.json')
+        if not os.path.exists(meta_path):
+            continue
+        
+        with open(meta_path, 'r') as file:
+            meta_data = json.load(file)
+            
+        if meta_data.get('model_version') != semantic_version:
+            continue
+
+        # Найдена версия, обновляем config.pbtxt
+        config_path = os.path.join(model_path, 'config.pbtxt')
+        if not os.path.exists(config_path):
+            raise HTTPException(status_code=404, detail="Config file not found.")
+
+        # Чтение и обновление config.pbtxt
+        with open(config_path, 'r') as config_file:
+            config_lines = config_file.readlines()
+
+        with open(config_path, 'w') as config_file:
+            for line in config_lines:
+                if line.startswith("version_policy: { specific: { versions: ["):
+                    config_file.write("version_policy: { specific: { versions: [" + str(version_dir) + "]}}")
+                else:
+                    config_file.write(line)
+
+        return {"version": version_dir}
+
+    raise HTTPException(status_code=404, detail="Semantic version not found.")
+
+
+def find_triton_version(model_path: str, semantic_version: str):
+    if not os.path.exists(model_path):
+        return -1
+    
+    for version_dir in os.listdir(model_path):
+        
+        meta_path = os.path.join(model_path, version_dir, 'meta.json')
+        if not os.path.exists(meta_path):
+            continue
+
+        with open(meta_path, 'r') as file:
+            meta_data = json.load(file)
+            if meta_data.get('model_version') == semantic_version:
+                return version_dir
+    
+    return -1
+
+
+
 def _read_model_version(config_content: str) -> Tuple[bool, str | None]:
     version_match = re.search(r"versions: \[(\d+)\]", config_content)
     if version_match:
