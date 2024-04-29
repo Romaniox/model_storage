@@ -2,12 +2,19 @@ version: '3.9'
 
 services:
   triton_server_modeler:
-    build: . 
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        USERNAME: user
+        USER_UID: 1002
+        USER_GID: 1002
+        
     container_name: model_storage
 
     # Start ssh and tritonserver
     command: "bash start.sh"
-    
+
     ports:
       # Triton Server Ports
       - "8100:8000"
@@ -24,7 +31,7 @@ services:
       - ./storage:/storage
 
       # Triton model repository volume
-      - ./storage/model_repository:${MODEL_REPOSITORY}
+      - ./storage/model_repository:/models
 
     shm_size: 256m
     deploy:
