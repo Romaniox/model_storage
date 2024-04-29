@@ -7,6 +7,7 @@ import httpx
 from typing import Tuple
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import JSONResponse
+from packaging import version
 
 # Путь к репозиторию моделей Triton
 MODEL_REPO_PATH = os.getenv('MODEL_REPOSITORY', '/models')
@@ -203,6 +204,40 @@ async def set_semantic_version(model_name: str, semantic_version: str):
         return {"version": version_dir}
 
     raise HTTPException(status_code=404, detail="Semantic version not found.")
+
+
+@app.get("/latest_semantic_version/{model_name}")
+async def latest_semantic_version(model_name: str):
+    model_path = os.path.join(MODEL_REPO_PATH, model_name)
+    if not os.path.exists(model_path):
+        raise HTTPException(status_code=404, detail="Model not found.")
+
+    latest_ver = None
+    latest_ver_str = ""
+
+    # Проходимся по всем папкам версий модели
+    for version_dir in os.listdir(model_path):
+        meta_path = os.path.join(model_path, version_dir, 'meta.json')
+        if not os.path.exists(meta_path):
+            continue
+        
+        with open(meta_path, 'r') as file:
+            meta_data = json.load(file)
+        
+        sem_version_str = meta_data.get('model_version')
+        if not sem_version_str:
+            continue
+
+        # Сравниваем семантические версии
+        sem_version = version.parse(sem_version_str)
+        if latest_ver is None or sem_version > latest_ver:
+            latest_ver = sem_version
+            latest_ver_str = sem_version_str
+
+    if latest_ver_str:
+        return {"latest_version": latest_ver_str}
+    else:
+        raise HTTPException(status_code=404, detail="No versions found.")
 
 
 def find_triton_version(model_path: str, semantic_version: str):
