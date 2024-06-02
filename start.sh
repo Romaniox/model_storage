@@ -1,8 +1,8 @@
 # Start ssh server as root
 nohup service ssh start &
 
-# Continue as user USERNAME to prevent problems with access rights 
-echo ${PASSWORD} | su ${USERNAME}
+# Continue as user MODEL_STORAGE_USERNAME to prevent problems with access rights 
+echo ${MODEL_STORAGE_PASSWORD} | su ${MODEL_STORAGE_USERNAME}
 
 # Create logging directory
 mkdir /storage/logs/
